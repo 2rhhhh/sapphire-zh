@@ -20,6 +20,16 @@ jobs:
           xcodebuild -version | tee -a "$GITHUB_WORKSPACE/build.log"
           ls -d /Applications/Xcode*.app | tee -a "$GITHUB_WORKSPACE/build.log"
 
+      - name: Cache build
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/SourcePackages
+            build/Build
+          key: sapphire-zh-${{ hashFiles('Sapphire.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-${{ github.run_number }}
+          restore-keys: |
+            sapphire-zh-${{ hashFiles('Sapphire.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-
+
       - name: Build (Release, unsigned)
         id: build
         run: |
