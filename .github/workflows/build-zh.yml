@@ -42,7 +42,16 @@ jobs:
             -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            build 2>&1 | tee -a "$GITHUB_WORKSPACE/build.log"
+            build 2>&1 | tee "$GITHUB_WORKSPACE/build.log" || true
+          echo "=== tail:"
+          tail -n 250 "$GITHUB_WORKSPACE/build.log"
+          cp "$GITHUB_WORKSPACE/build.log" "build-log-${{ github.run_number }}.txt"
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add "build-log-${{ github.run_number }}.txt"
+          git commit -m "build log #${{ github.run_number }}" || true
+          git push || true
+          grep -q "BUILD SUCCEEDED" "$GITHUB_WORKSPACE/build.log"
 
       - name: Locate products
         if: always()
@@ -63,16 +72,6 @@ jobs:
           test -n "$APP" || { echo "no Sapphire.app found" | tee -a build.log; exit 1; }
           ditto -c -k --keepParent "$APP" Sapphire-zh.app.zip
           ls -lh Sapphire-zh.app.zip | tee -a build.log
-
-      - name: Upload log to repo
-        if: always()
-        run: |
-          cp build.log "build-log-${{ github.run_number }}.txt"
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add "build-log-${{ github.run_number }}.txt"
-          git commit -m "build log #${{ github.run_number }}" || true
-          git push || true
 
       - uses: actions/upload-artifact@v4
         if: success()
