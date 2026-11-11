@@ -3,6 +3,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-26
@@ -11,34 +14,63 @@ jobs:
 
       - name: Toolchain
         run: |
-          xcodebuild -version
-          ls -d /Applications/Xcode*.app
+          xcodebuild -version | tee -a "$GITHUB_WORKSPACE/build.log"
+          ls -d /Applications/Xcode*.app | tee -a "$GITHUB_WORKSPACE/build.log"
 
       - name: Build (Release, unsigned)
+        id: build
+        continue-on-error: true
         run: |
+          set -o pipefail
           xcodebuild \
             -project Sapphire.xcodeproj \
             -scheme Sapphire \
             -configuration Release \
             -derivedDataPath build \
+            -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            build 2>&1 | tail -n 60
+            build 2>&1 | tee -a "$GITHUB_WORKSPACE/build.log"
+
+      - name: Locate products
+        if: always()
+        run: |
+          {
+            echo "=== exit code: ${{ steps.build.outcome }}"
+            echo "=== products:"
+            find build -maxdepth 6 -name "*.app" -print 2>/dev/null || true
+            echo "=== tail of log:"
+            tail -n 80 "$GITHUB_WORKSPACE/build.log" || true
+          } | tee -a "$GITHUB_WORKSPACE/build.log"
 
       - name: Package
+        if: steps.build.outcome == 'success'
         run: |
-          APP=build/Build/Products/Release/Sapphire.app
-          test -d "$APP" || { echo "build output missing"; exit 1; }
+          set -e
+          APP="$(find build -maxdepth 6 -name 'Sapphire.app' -print -quit)"
+          test -n "$APP" || { echo "no Sapphire.app found" | tee -a build.log; exit 1; }
           ditto -c -k --keepParent "$APP" Sapphire-zh.app.zip
-          ls -lh Sapphire-zh.app.zip
+          ls -lh Sapphire-zh.app.zip | tee -a build.log
+
+      - name: Upload log to repo
+        if: always()
+        run: |
+          cp build.log "build-log-${{ github.run_number }}.txt"
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add "build-log-${{ github.run_number }}.txt"
+          git commit -m "build log #${{ github.run_number }}" || true
+          git push || true
 
       - uses: actions/upload-artifact@v4
+        if: steps.build.outcome == 'success'
         with:
           name: Sapphire-zh
           path: Sapphire-zh.app.zip
           if-no-files-found: error
 
       - name: Publish release
+        if: steps.build.outcome == 'success'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: zh-build-${{ github.run_number }}
