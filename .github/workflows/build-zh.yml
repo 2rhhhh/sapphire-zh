@@ -22,7 +22,6 @@ jobs:
 
       - name: Build (Release, unsigned)
         id: build
-        continue-on-error: true
         run: |
           set -o pipefail
           xcodebuild \
@@ -47,7 +46,7 @@ jobs:
           } | tee -a "$GITHUB_WORKSPACE/build.log"
 
       - name: Package
-        if: steps.build.outcome == 'success'
+        if: success()
         run: |
           set -e
           APP="$(find build -maxdepth 6 -name 'Sapphire.app' -print -quit)"
@@ -66,14 +65,14 @@ jobs:
           git push || true
 
       - uses: actions/upload-artifact@v4
-        if: steps.build.outcome == 'success'
+        if: success()
         with:
           name: Sapphire-zh
           path: Sapphire-zh.app.zip
           if-no-files-found: error
 
       - name: Publish release
-        if: steps.build.outcome == 'success'
+        if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: zh-build-${{ github.run_number }}
