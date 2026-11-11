@@ -1,0 +1,48 @@
+name: build-zh
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          ls -d /Applications/Xcode*.app
+
+      - name: Build (Release, unsigned)
+        run: |
+          xcodebuild \
+            -project Sapphire.xcodeproj \
+            -scheme Sapphire \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build 2>&1 | tail -n 60
+
+      - name: Package
+        run: |
+          APP=build/Build/Products/Release/Sapphire.app
+          test -d "$APP" || { echo "build output missing"; exit 1; }
+          ditto -c -k --keepParent "$APP" Sapphire-zh.app.zip
+          ls -lh Sapphire-zh.app.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sapphire-zh
+          path: Sapphire-zh.app.zip
+          if-no-files-found: error
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: zh-build-${{ github.run_number }}
+          name: Sapphire 中文版 build ${{ github.run_number }}
+          files: Sapphire-zh.app.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
